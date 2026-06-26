@@ -19,6 +19,14 @@ const CONFIG = {
     debug: true,
 
     /*
+     * 开启后，每次重放 API 调用时会推送额外的 debug 通知：
+     * - 脚本启动时：显示目标类型、日期、已存凭据的保存时间
+     * - HTTP 响应后：显示状态码、响应体前 300 字符
+     * - 解析完成后：显示今日所有打卡记录的详细信息
+     */
+    debugNotify: false,
+
+    /*
      * auto：按当前时间判断；1/morning/am：上午；2/evening/pm：下午。
      * 定时任务在模块里会明确传 1 或 2，手动执行可以保持 auto。
      */
@@ -176,6 +184,7 @@ function applyArguments() {
     const args = parseArguments();
 
     CONFIG.debug = readBool(args.debug, CONFIG.debug);
+    CONFIG.debugNotify = readBool(args.debug_notify, CONFIG.debugNotify);
     CONFIG.targetCardType = args.target_card_type || CONFIG.targetCardType;
     CONFIG.targetDate = args.target_date || CONFIG.targetDate;
     CONFIG.notifyWhenAlreadyPunched = readBool(
@@ -239,6 +248,12 @@ function lower(value) {
 
 function notify(title, subtitle, body) {
     $notification.post(title, subtitle || "", body || "");
+}
+
+function debugNotify(title, subtitle, body) {
+    if (CONFIG.debugNotify) {
+        $notification.post("[Replay] " + title, subtitle || "", body || "");
+    }
 }
 
 function nowText() {
@@ -560,6 +575,12 @@ function handleReplayResult(error, response, data) {
 
     const statusCode = response && response.status ? String(response.status) : "unknown";
 
+    debugNotify(
+        "API 响应已收到",
+        `状态码：${statusCode}  时间：${currentTime}`,
+        "响应体前 300 字符：\n" + String(data || "").slice(0, 300)
+    );
+
     if (!statusCode.startsWith("2")) {
         notify(
             CONFIG.treatApiFailureAsMissing
@@ -585,6 +606,16 @@ function handleReplayResult(error, response, data) {
         $done();
         return;
     }
+
+    debugNotify(
+        "解析完成 · 今日打卡详情",
+        `日期：${result.today}  共 ${result.allRecordCount} 条记录`,
+        `上午：${result.hasMorning ? "✓ " + result.morningTime : "✗ 无记录"}` +
+        `\n下午：${result.hasEvening ? "✓ " + result.eveningTime : "✗ 无记录"}` +
+        `\n检查目标：${result.targetLabel}` +
+        `\n目标打卡：${result.targetExists ? "✓ " + result.targetTime : "✗ 未找到"}` +
+        `\n当天匹配记录数：${result.todayRecordCount}`
+    );
 
     if (!result.targetExists) {
         if (CONFIG.notifyWhenMissingPunch) {
@@ -627,6 +658,17 @@ function main() {
         }
 
         const record = JSON.parse(raw);
+
+        debugNotify(
+            "脚本已启动",
+            `当前时间：${nowText()}`,
+            `目标类型：${currentTargetCardType() === "1" ? "上午" : "下午"}（配置：${CONFIG.targetCardType}）` +
+            `\n目标日期：${targetLocalDate()}` +
+            `\n凭据保存于：${record.savedAt || "未知"}` +
+            `\n凭据日期：${record.savedDate || "未知"}` +
+            `\ntimeout：${CONFIG.timeout}s`
+        );
+
         const built = buildOptions(record);
 
         log("Replay method=" + built.method + ", url=" + built.requestOptions.url);

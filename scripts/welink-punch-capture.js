@@ -18,6 +18,13 @@ const CONFIG = {
     debug: true,
 
     /*
+     * 开启后，每当 Welink App 调用打卡记录 API 时推送通知，
+     * 显示捕获是否成功、保存时间、URL 等信息。
+     * 用于调试：确认 App 是否真的访问了该接口，以及保存是否正常。
+     */
+    debugNotify: false,
+
+    /*
      * 是否只保存成功响应。
      * 建议保持 true，避免保存无效 cookie 或失败请求。
      */
@@ -90,6 +97,7 @@ function applyArguments() {
     const args = parseArguments();
 
     CONFIG.debug = readBool(args.debug, CONFIG.debug);
+    CONFIG.debugNotify = readBool(args.debug_notify, CONFIG.debugNotify);
     CONFIG.saveOnlyWhenApiSuccess = readBool(
         args.save_only_success,
         CONFIG.saveOnlyWhenApiSuccess
@@ -100,6 +108,12 @@ function applyArguments() {
 function log(message) {
     if (CONFIG.debug) {
         console.log("[WelinkPunchCapture] " + message);
+    }
+}
+
+function debugNotify(title, subtitle, body) {
+    if (CONFIG.debugNotify) {
+        $notification.post("[Capture] " + title, subtitle || "", body || "");
     }
 }
 
@@ -187,17 +201,25 @@ function main() {
             return;
         }
 
+        const captureTime = nowISO();
         const body = $response && $response.body ? $response.body : "";
+        const apiOk = apiResponseSuccess(body);
 
-        if (CONFIG.saveOnlyWhenApiSuccess && !apiResponseSuccess(body)) {
+        if (CONFIG.saveOnlyWhenApiSuccess && !apiOk) {
             log("API response is not success. Skip saving request.");
+            debugNotify(
+                "API 调用已拦截（未保存）",
+                "时间：" + captureTime,
+                "save_only_success=true，但本次 API 响应判定为失败，跳过保存。\n" +
+                "响应前 200 字符：" + body.slice(0, 200)
+            );
             $done({});
             return;
         }
 
         const record = {
             version: 1,
-            savedAt: nowISO(),
+            savedAt: captureTime,
             savedDate: todayLocalDate(),
             method: $request.method || "GET",
             url: $request.url,
@@ -209,13 +231,31 @@ function main() {
 
         if (ok) {
             log("Saved request at " + record.savedAt);
+            debugNotify(
+                "API 调用已捕获并保存 ✓",
+                "保存时间：" + captureTime,
+                "日期：" + record.savedDate +
+                "\nMethod：" + record.method +
+                "\nAPI 响应：" + (apiOk ? "成功 (code=0)" : "未检查") +
+                "\nURL（前 80 字符）：" + record.url.slice(0, 80)
+            );
         } else {
             log("Failed to save request.");
+            debugNotify(
+                "API 调用已拦截（保存失败）✗",
+                "时间：" + captureTime,
+                "persistentStore.write 返回 false，凭据未能保存。请检查 Surge 存储权限。"
+            );
         }
 
         $done({});
     } catch (e) {
         log("Capture error: " + e);
+        debugNotify(
+            "Capture 脚本异常 ✗",
+            nowISO(),
+            String(e)
+        );
         $done({});
     }
 }
