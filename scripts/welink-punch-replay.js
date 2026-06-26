@@ -102,15 +102,31 @@ const CONFIG = {
 };
 
 function parseArguments() {
-    const raw = typeof $argument === "string" ? $argument : "";
+    let raw = typeof $argument === "string" ? $argument : "";
+    
+    // 去除可能存在的首尾双引号或单引号
+    raw = raw.replace(/^"|"$/g, "").replace(/^'|'$/g, "").trim();
+    if (!raw) return {};
+
     const result = {};
+    
+    // 支持 &、逗号、分号作为参数分隔符
+    const segments = raw.split(/[&,;]/).map(s => s.trim()).filter(Boolean);
 
-    raw.split("&").forEach(pair => {
-        if (!pair) return;
-
+    segments.forEach(pair => {
+        // 支持 = 或 : 作为键值对的分隔符
         const eqIndex = pair.indexOf("=");
-        const rawKey = eqIndex >= 0 ? pair.slice(0, eqIndex) : pair;
-        const rawValue = eqIndex >= 0 ? pair.slice(eqIndex + 1) : "true";
+        const colonIndex = pair.indexOf(":");
+        let splitIndex = -1;
+
+        if (eqIndex >= 0 && colonIndex >= 0) {
+            splitIndex = Math.min(eqIndex, colonIndex);
+        } else {
+            splitIndex = Math.max(eqIndex, colonIndex);
+        }
+
+        const rawKey = splitIndex >= 0 ? pair.slice(0, splitIndex) : pair;
+        const rawValue = splitIndex >= 0 ? pair.slice(splitIndex + 1) : "true";
 
         /*
          * 如果模块变量未能正确替换，rawKey 或 rawValue 可能是
@@ -137,6 +153,9 @@ function parseArguments() {
         } catch (e) {
             return;
         }
+
+        // 去除值里可能存在的首尾引号
+        value = value.replace(/^"|"$/g, "").replace(/^'|'$/g, "").trim();
 
         result[key] = value;
     });
@@ -206,39 +225,43 @@ function mergeObjects(base, extra) {
 function applyArguments() {
     const args = parseArguments();
 
+    // 同时支持 snake_case 和 camelCase
     CONFIG.debug = readBool(args.debug, CONFIG.debug);
-    CONFIG.debugNotify = readBool(args.debug_notify, CONFIG.debugNotify);
-    CONFIG.targetCardType = args.target_card_type || CONFIG.targetCardType;
-    CONFIG.targetDate = args.target_date || CONFIG.targetDate;
+    CONFIG.debugNotify = readBool(args.debug_notify || args.debugNotify, CONFIG.debugNotify);
+    CONFIG.targetCardType = args.target_card_type || args.targetCardType || CONFIG.targetCardType;
+    CONFIG.targetDate = args.target_date || args.targetDate || CONFIG.targetDate;
     CONFIG.notifyWhenAlreadyPunched = readBool(
-        args.notify_when_already_punched,
+        args.notify_when_already_punched || args.notifyWhenAlreadyPunched,
         CONFIG.notifyWhenAlreadyPunched
     );
     CONFIG.notifyWhenMissingPunch = readBool(
-        args.notify_when_missing_punch,
+        args.notify_when_missing_punch || args.notifyWhenMissingPunch,
         CONFIG.notifyWhenMissingPunch
     );
     CONFIG.treatApiFailureAsMissing = readBool(
-        args.treat_api_failure_as_missing,
+        args.treat_api_failure_as_missing || args.treatApiFailureAsMissing,
         CONFIG.treatApiFailureAsMissing
     );
-    CONFIG.timeout = readNumber(args.request_timeout, CONFIG.timeout);
+    CONFIG.timeout = readNumber(
+        args.request_timeout || args.timeout || args.requestTimeout,
+        CONFIG.timeout
+    );
 
     CONFIG.overrideHeaders = mergeObjects(
         CONFIG.overrideHeaders,
-        parseJsonObject(args.override_headers, {})
+        parseJsonObject(args.override_headers || args.overrideHeaders, {})
     );
     CONFIG.overrideQuery = mergeObjects(
         CONFIG.overrideQuery,
-        parseJsonObject(args.override_query, {})
+        parseJsonObject(args.override_query || args.overrideQuery, {})
     );
     CONFIG.overrideJsonBody = mergeObjects(
         CONFIG.overrideJsonBody,
-        parseJsonObject(args.override_json_body, {})
+        parseJsonObject(args.override_json_body || args.overrideJsonBody, {})
     );
     CONFIG.overrideFormBody = mergeObjects(
         CONFIG.overrideFormBody,
-        parseJsonObject(args.override_form_body, {})
+        parseJsonObject(args.override_form_body || args.overrideFormBody, {})
     );
 
     CONFIG.overrideHeaders = mergeObjects(

@@ -64,15 +64,31 @@ const CONFIG = {
 };
 
 function parseArguments() {
-    const raw = typeof $argument === "string" ? $argument : "";
+    let raw = typeof $argument === "string" ? $argument : "";
+    
+    // 去除可能存在的首尾双引号或单引号
+    raw = raw.replace(/^"|"$/g, "").replace(/^'|'$/g, "").trim();
+    if (!raw) return {};
+
     const result = {};
+    
+    // 支持 &、逗号、分号作为参数分隔符
+    const segments = raw.split(/[&,;]/).map(s => s.trim()).filter(Boolean);
 
-    raw.split("&").forEach(pair => {
-        if (!pair) return;
-
+    segments.forEach(pair => {
+        // 支持 = 或 : 作为键值对的分隔符
         const eqIndex = pair.indexOf("=");
-        const rawKey = eqIndex >= 0 ? pair.slice(0, eqIndex) : pair;
-        const rawValue = eqIndex >= 0 ? pair.slice(eqIndex + 1) : "true";
+        const colonIndex = pair.indexOf(":");
+        let splitIndex = -1;
+
+        if (eqIndex >= 0 && colonIndex >= 0) {
+            splitIndex = Math.min(eqIndex, colonIndex);
+        } else {
+            splitIndex = Math.max(eqIndex, colonIndex);
+        }
+
+        const rawKey = splitIndex >= 0 ? pair.slice(0, splitIndex) : pair;
+        const rawValue = splitIndex >= 0 ? pair.slice(splitIndex + 1) : "true";
 
         /*
          * 如果模块变量未能正确替换，rawKey 或 rawValue 可能是
@@ -100,6 +116,9 @@ function parseArguments() {
             return;
         }
 
+        // 去除值里可能存在的首尾引号
+        value = value.replace(/^"|"$/g, "").replace(/^'|'$/g, "").trim();
+
         result[key] = value;
     });
 
@@ -119,13 +138,17 @@ function readBool(value, fallback) {
 function applyArguments() {
     const args = parseArguments();
 
+    // 同时支持 snake_case 和 camelCase
     CONFIG.debug = readBool(args.debug, CONFIG.debug);
-    CONFIG.debugNotify = readBool(args.debug_notify, CONFIG.debugNotify);
+    CONFIG.debugNotify = readBool(args.debug_notify || args.debugNotify, CONFIG.debugNotify);
     CONFIG.saveOnlyWhenApiSuccess = readBool(
-        args.save_only_success,
+        args.save_only_success || args.saveOnlyWhenApiSuccess,
         CONFIG.saveOnlyWhenApiSuccess
     );
-    CONFIG.saveAllHeaders = readBool(args.save_all_headers, CONFIG.saveAllHeaders);
+    CONFIG.saveAllHeaders = readBool(
+        args.save_all_headers || args.saveAllHeaders,
+        CONFIG.saveAllHeaders
+    );
 }
 
 function log(message) {
