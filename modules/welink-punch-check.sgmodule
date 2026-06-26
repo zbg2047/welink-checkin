@@ -6,8 +6,8 @@
 hostname = %APPEND% api.welink.huaweicloud.com
 
 [Script]
-welink_punch_capture = type=http-response,pattern=^https:\/\/api\.welink\.huaweicloud\.com\/mcloud\/mag\/ProxyForText\/attendance_report_api\/v1\/user\/statistics\/dailyPunchCardRecords,requires-body=true,max-size=262144,script-path=https://raw.githubusercontent.com/YOUR_NAME/YOUR_REPO/main/scripts/welink-punch-capture.js
+welink_punch_capture = type=http-response,pattern=^https:\/\/api\.welink\.huaweicloud\.com\/mcloud\/mag\/ProxyForText\/attendance_report_api\/v1\/user\/statistics\/dailyPunchCardRecords,requires-body=true,max-size=262144,script-path=https://github.com/zbg2047/welink-checkin/raw/refs/heads/main/scripts/welink-punch-capture.js
 
-welink_punch_check_morning = type=cron,cronexp="24-30 6 * * *",script-path=https://raw.githubusercontent.com/YOUR_NAME/YOUR_REPO/main/scripts/welink-punch-replay.js,timeout=30
+welink_punch_check_morning = type=cron,cronexp="24-30 6 * * *",script-path=https://github.com/zbg2047/welink-checkin/raw/refs/heads/main/scripts/welink-punch-replay.js,timeout=30
 
-welink_punch_check_evening = type=cron,cronexp="5,8,11,14,17,20,23,26,29 18 * * *",script-path=https://raw.githubusercontent.com/YOUR_NAME/YOUR_REPO/main/scripts/welink-punch-replay.js,timeout=30
+welink_punch_check_evening = type=cron,cronexp="5,8,11,14,17,20,23,26,29 18 * * *",script-path=https://github.com/zbg2047/welink-checkin/raw/refs/heads/main/scripts/welink-punch-replay.js,timeout=30
