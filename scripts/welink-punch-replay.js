@@ -27,12 +27,6 @@ const CONFIG = {
     debugNotify: false,
 
     /*
-     * auto：按当前时间判断；1/morning/am：上午；2/evening/pm：下午。
-     * 定时任务在模块里会明确传 1 或 2，手动执行可以保持 auto。
-     */
-    targetCardType: "auto",
-
-    /*
      * auto/today：使用本地今天；也可以手动填 2026-06-26。
      */
     targetDate: "auto",
@@ -229,7 +223,6 @@ function applyArguments() {
     // 同时支持 snake_case 和 camelCase
     CONFIG.debug = readBool(args.debug, CONFIG.debug);
     CONFIG.debugNotify = readBool(args.debug_notify || args.debugNotify, CONFIG.debugNotify);
-    CONFIG.targetCardType = args.target_card_type || args.targetCardType || CONFIG.targetCardType;
     CONFIG.targetDate = args.target_date || args.targetDate || CONFIG.targetDate;
     CONFIG.notifyWhenAlreadyPunched = readBool(
         args.notify_when_already_punched || args.notifyWhenAlreadyPunched,
@@ -299,7 +292,7 @@ function notify(title, subtitle, body) {
 
 function debugNotify(title, subtitle, body) {
     if (CONFIG.debugNotify) {
-        $notification.post("[Replay] " + title, subtitle || "", body || "");
+        $notification.post(title, subtitle || "", body || "");
     }
 }
 
@@ -310,8 +303,7 @@ function nowText() {
     const day = String(d.getDate()).padStart(2, "0");
     const hh = String(d.getHours()).padStart(2, "0");
     const mm = String(d.getMinutes()).padStart(2, "0");
-    const ss = String(d.getSeconds()).padStart(2, "0");
-    return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+    return `${y}-${m}-${day} ${hh}:${mm}`;
 }
 
 function todayLocalDate() {
@@ -333,16 +325,10 @@ function targetLocalDate() {
 }
 
 function currentTargetCardType() {
-    const configured = lower(CONFIG.targetCardType);
-
-    if (["1", "morning", "am"].includes(configured)) return "1";
-    if (["2", "evening", "pm"].includes(configured)) return "2";
-
     const hour = new Date().getHours();
 
     /*
-     * 6:24 - 6:30 检查上午卡。
-     * 18:05 - 18:30 检查下午卡。
+     * 按脚本实际运行时刻判断上午/下午，避免模块参数替换失败或手动参数导致标题偏移。
      */
     if (hour < 12) return "1";
     return "2";
@@ -376,6 +362,14 @@ function recordDate(record) {
 
 function recordCardType(record) {
     return String(firstDefined(record, ["cardType", "cardtype", "card_type"]));
+}
+
+function minutePunchTime(value) {
+    const text = String(value || "");
+    const match = text.match(/\b(\d{1,2}):(\d{2})/);
+    if (!match) return text;
+
+    return `${match[1].padStart(2, "0")}:${match[2]}`;
 }
 
 function getHeader(headers, name) {
@@ -561,11 +555,11 @@ function parsePunchStatus(responseBody) {
         targetCardType,
         targetLabel,
         targetExists,
-        targetTime: targetRecord ? String(targetRecord.time || "") : "",
+        targetTime: targetRecord ? minutePunchTime(targetRecord.time) : "",
         hasMorning,
         hasEvening,
-        morningTime: morningRecord ? String(morningRecord.time || "") : "",
-        eveningTime: eveningRecord ? String(eveningRecord.time || "") : "",
+        morningTime: morningRecord ? minutePunchTime(morningRecord.time) : "",
+        eveningTime: eveningRecord ? minutePunchTime(eveningRecord.time) : "",
         todayRecordCount: todayRecords.length,
         allRecordCount: records.length
     };
@@ -609,12 +603,13 @@ function handleReplayResult(error, response, data) {
     const targetLabel = cardTypeLabel(targetCardType);
 
     if (error) {
+        log("Replay request failed: " + String(error));
         notify(
             CONFIG.treatApiFailureAsMissing
-                ? `Welink ${targetLabel}可能未打卡`
-                : `Welink ${targetLabel}打卡状态无法确认`,
+                ? `⚠️ ${targetLabel}可能还没打卡`
+                : `⚠️ ${targetLabel}状态无法确认`,
             currentTime,
-            `请求失败，请打开 Welink 确认。${String(error).slice(0, 80)}`
+            "请求失败"
         );
         $done();
         return;
@@ -623,18 +618,19 @@ function handleReplayResult(error, response, data) {
     const statusCode = response && response.status ? String(response.status) : "unknown";
 
     debugNotify(
-        "[Replay] API 响应",
-        `HTTP ${statusCode} · ${currentTime.slice(11, 19)}`,
-        String(data || "").slice(0, 150)
+        "接口有响应",
+        `HTTP ${statusCode} · ${currentTime.slice(11)}`,
+        "已收到返回"
     );
 
     if (!statusCode.startsWith("2")) {
+        log("Replay HTTP status is not 2xx: " + statusCode + ", response=" + String(data || "").slice(0, 500));
         notify(
             CONFIG.treatApiFailureAsMissing
-                ? `Welink ${targetLabel}可能未打卡`
-                : `Welink ${targetLabel}打卡状态无法确认`,
+                ? `⚠️ ${targetLabel}可能还没打卡`
+                : `⚠️ ${targetLabel}状态无法确认`,
             currentTime,
-            `HTTP ${statusCode}，请打开 Welink 确认`
+            `HTTP ${statusCode}`
         );
         $done();
         return;
@@ -643,10 +639,11 @@ function handleReplayResult(error, response, data) {
     const result = parsePunchStatus(data);
 
     if (!result.apiSuccess) {
+        log("Replay API parse/status failed: " + result.reason + ", detail=" + (result.detail || ""));
         notify(
             CONFIG.treatApiFailureAsMissing
-                ? `Welink ${targetLabel}可能未打卡`
-                : `Welink ${targetLabel}打卡状态无法确认`,
+                ? `⚠️ ${targetLabel}可能还没打卡`
+                : `⚠️ ${targetLabel}状态无法确认`,
             currentTime,
             result.reason
         );
@@ -655,7 +652,7 @@ function handleReplayResult(error, response, data) {
     }
 
     debugNotify(
-        "[Replay] 今日打卡详情",
+        "今日打卡详情",
         `${result.today} · ${result.allRecordCount} 条`,
         `上午 ${result.hasMorning ? "✓ " + result.morningTime : "✗"} · 下午 ${result.hasEvening ? "✓ " + result.eveningTime : "✗"}\n目标 ${result.targetLabel}：${result.targetExists ? "✓ " + result.targetTime : "✗ 未找到"}`
     );
@@ -663,8 +660,8 @@ function handleReplayResult(error, response, data) {
     if (!result.targetExists) {
         if (CONFIG.notifyWhenMissingPunch) {
             notify(
-                `Welink ${result.targetLabel}还没有打卡记录`,
-                `${result.today} · ${currentTime.slice(11, 16)}`,
+                `⏰ ${result.targetLabel}还没有打卡，快点打卡`,
+                `${result.today} · ${currentTime.slice(11)}`,
                 `上午 ${result.hasMorning ? "✓ " + result.morningTime : "✗ 缺失"} · 下午 ${result.hasEvening ? "✓ " + result.eveningTime : "✗ 缺失"}`
             );
         }
@@ -675,7 +672,7 @@ function handleReplayResult(error, response, data) {
 
     if (CONFIG.notifyWhenAlreadyPunched) {
         notify(
-            `Welink ${result.targetLabel}已检测到打卡记录`,
+            `✅ 已成功打卡，${result.targetLabel}不再提醒`,
             `${result.today} · 打卡时间 ${result.targetTime || "未知"}`,
             `上午 ${result.hasMorning ? "✓ " + result.morningTime : "✗ 缺失"} · 下午 ${result.hasEvening ? "✓ " + result.eveningTime : "✗ 缺失"}`
         );
@@ -692,9 +689,9 @@ function main() {
 
         if (!raw) {
             notify(
-                "Welink 打卡检查失败",
+                "⚠️ 打卡检查失败",
                 nowText(),
-                "尚未捕获凭据，请先打开 Welink 访问打卡记录页面"
+                "尚未捕获凭据，请先打开打卡记录页面"
             );
             $done();
             return;
@@ -704,8 +701,8 @@ function main() {
         const typeLabel = currentTargetCardType() === "1" ? "上午" : "下午";
 
         debugNotify(
-            "[Replay] 脚本已启动",
-            `${typeLabel} · ${targetLocalDate()} · ${nowText().slice(11, 19)}`,
+            "检查已启动",
+            `${typeLabel} · ${targetLocalDate()} · ${nowText().slice(11)}`,
             `凭据日期：${record.savedDate || "未知"} · timeout ${CONFIG.timeout}s`
         );
 
@@ -715,10 +712,11 @@ function main() {
 
         requestWithMethod(built.method, built.requestOptions, handleReplayResult);
     } catch (e) {
+        log("Replay script error: " + e);
         notify(
-            "Welink 打卡检查脚本异常",
+            "⚠️ 打卡检查脚本异常",
             nowText(),
-            String(e).slice(0, 100)
+            "脚本异常"
         );
         $done();
     }

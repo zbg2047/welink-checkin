@@ -46,11 +46,11 @@ scripts/welink-punch-replay.js
 注意：在当前 Surge iOS UI 上，模块参数编辑页可能只显示一个原始 query-string 输入框，不会拆成多行表单。为了避免长参数不可编辑，本模块主要暴露常用参数：
 
 ```text
-date=auto&manual=auto&timeout=2&notify_punched=true&notify_missing=true&debug=true&debug_notify=false
+date=auto&timeout=2&notify_punched=true&notify_missing=true&debug=true&debug_notify=false
 ```
 
 - `date=auto`：`auto` 或 `today` 表示今天；也可以手动填 `2026-06-26`。
-- `manual=auto`：手动 generic 脚本的目标卡类型；`auto` 按当前时间判断，也可以填 `1` 或 `2`。定时任务上午固定 `1`，下午固定 `2`。
+- 上午/下午目标由脚本运行时的当前时间自动判断：12:00 前为上午，12:00 后为下午。
 - `timeout=2`：重放查询请求超时时间，单位秒。
 - `notify_punched=true`：已打卡时是否通知。
 - `notify_missing=true`：未打卡时是否通知。

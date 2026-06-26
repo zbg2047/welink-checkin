@@ -160,7 +160,7 @@ function log(message) {
 
 function debugNotify(title, subtitle, body) {
     if (CONFIG.debugNotify) {
-        $notification.post("[Capture] " + title, subtitle || "", body || "");
+        $notification.post(title, subtitle || "", body || "");
     }
 }
 
@@ -170,6 +170,16 @@ function lower(value) {
 
 function nowISO() {
     return new Date().toISOString();
+}
+
+function minuteText(date) {
+    const d = date || new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${y}-${m}-${day} ${hh}:${mm}`;
 }
 
 function todayLocalDate() {
@@ -255,9 +265,9 @@ function main() {
         if (CONFIG.saveOnlyWhenApiSuccess && !apiOk) {
             log("API response is not success. Skip saving request.");
             debugNotify(
-                "[Capture] API 已拦截·未保存",
-                captureTime,
-                "API 响应判定为失败，凭据跳过保存"
+                "接口已拦截，未保存凭据",
+                minuteText(),
+                "响应未成功"
             );
             $done({});
             return;
@@ -278,16 +288,16 @@ function main() {
         if (ok) {
             log("Saved request at " + record.savedAt);
             debugNotify(
-                "[Capture] API 已捕获并保存 ✓",
-                record.savedDate + " · " + captureTime.slice(11, 19),
-                "凭据已更新 · " + record.method
+                "✅ 凭据已更新",
+                record.savedDate + " · " + minuteText().slice(11),
+                "已保存查询请求"
             );
         } else {
             log("Failed to save request.");
             debugNotify(
-                "[Capture] 保存失败 ✗",
-                captureTime.slice(11, 19),
-                "persistentStore 写入失败，请检查 Surge 存储权限"
+                "⚠️ 凭据保存失败",
+                minuteText().slice(11),
+                "请检查 Surge 存储权限"
             );
         }
 
@@ -295,9 +305,9 @@ function main() {
     } catch (e) {
         log("Capture error: " + e);
         debugNotify(
-            "[Capture] 脚本异常 ✗",
-            nowISO().slice(11, 19),
-            String(e).slice(0, 100)
+            "⚠️ 捕获脚本异常",
+            minuteText().slice(11),
+            "详情请看日志"
         );
         $done({});
     }
