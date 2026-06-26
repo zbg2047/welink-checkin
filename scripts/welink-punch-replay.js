@@ -144,8 +144,9 @@ function parseArguments() {
 
         if (!key) return;
 
-        /* 跳过未替换的占位符值（形如 %someKey%） */
+        /* 跳过未替换的占位符值（形如 %someKey% 或 {{{someKey}}}） */
         if (/^%\w+%$/.test(rawValue.trim())) return;
+        if (/^\{\{\{[\w.-]+\}\}\}$/.test(rawValue.trim())) return;
 
         let value;
         try {

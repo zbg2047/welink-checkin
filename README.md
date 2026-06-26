@@ -41,17 +41,21 @@ scripts/welink-punch-replay.js
 
 ## Surge 可编辑参数
 
-模块头部使用官方 `#!arguments=...` 声明可编辑参数，脚本行再用 `%参数名%` 占位传给 `$argument`。
+模块头部使用官方 `#!arguments=...` 声明可编辑参数，脚本行再用 `{{{参数名}}}` 占位传给 `$argument`。
 
-注意：在当前 Surge iOS UI 上，模块参数编辑页可能只显示一个原始 query-string 输入框，不会拆成多行表单。为了避免长参数不可编辑，本模块只暴露三个常用参数：
+注意：在当前 Surge iOS UI 上，模块参数编辑页可能只显示一个原始 query-string 输入框，不会拆成多行表单。为了避免长参数不可编辑，本模块主要暴露常用参数：
 
 ```text
-date=auto&manual=auto&timeout=2
+date=auto&manual=auto&timeout=2&notify_punched=true&notify_missing=true&debug=true&debug_notify=false
 ```
 
 - `date=auto`：`auto` 或 `today` 表示今天；也可以手动填 `2026-06-26`。
 - `manual=auto`：手动 generic 脚本的目标卡类型；`auto` 按当前时间判断，也可以填 `1` 或 `2`。定时任务上午固定 `1`，下午固定 `2`。
 - `timeout=2`：重放查询请求超时时间，单位秒。
+- `notify_punched=true`：已打卡时是否通知。
+- `notify_missing=true`：未打卡时是否通知。
+- `debug=true`：是否输出控制台日志。
+- `debug_notify=false`：是否推送调试通知。
 
 捕获脚本固定为只保存成功响应并保存请求 headers；重放脚本固定为缺卡、请求失败、已打卡都会通知。如需高级覆盖 headers/query/body，请直接编辑模块中对应脚本行的 `argument="..."`。
 
