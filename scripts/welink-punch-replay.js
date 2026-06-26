@@ -24,7 +24,7 @@ const CONFIG = {
      * - HTTP 响应后：显示状态码、响应体前 300 字符
      * - 解析完成后：显示今日所有打卡记录的详细信息
      */
-    debugNotify: false,
+    debugNotify: true,
 
     /*
      * auto：按当前时间判断；1/morning/am：上午；2/evening/pm：下午。

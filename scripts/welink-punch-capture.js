@@ -22,7 +22,7 @@ const CONFIG = {
      * 显示捕获是否成功、保存时间、URL 等信息。
      * 用于调试：确认 App 是否真的访问了该接口，以及保存是否正常。
      */
-    debugNotify: false,
+    debugNotify: true,
 
     /*
      * 是否只保存成功响应。

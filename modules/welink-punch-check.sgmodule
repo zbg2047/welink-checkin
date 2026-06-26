@@ -1,7 +1,7 @@
 #!name=Welink 打卡状态检查
 #!desc=捕获 Welink 打卡记录查询请求，并在指定时间重放查询上午/下午打卡状态，仅用于状态检查与提醒
 #!system=ios
-#!arguments=date:auto,manual:auto,timeout:2,debug_notify:false
+#!arguments=date:auto,manual:auto,timeout:2,debug_notify:true
 #!arguments-desc=\n date:\n查询日期。auto 表示自动使用当天日期，也可手动填写如 2026-06-26\n\n manual:\n手动触发时检查的打卡类型。auto=自动判断，1=上午，2=下午\n\n timeout:\n重放请求的超时时间（秒），默认 2 秒\n\n debug_notify:\n是否开启调试通知，true=开启，false=关闭
 
 [MITM]
