@@ -19,6 +19,17 @@ const CONFIG = {
     debug: true,
 
     /*
+     * auto：按当前时间判断；1/morning/am：上午；2/evening/pm：下午。
+     * 定时任务在模块里会明确传 1 或 2，手动执行可以保持 auto。
+     */
+    targetCardType: "auto",
+
+    /*
+     * auto/today：使用本地今天；也可以手动填 2026-06-26。
+     */
+    targetDate: "auto",
+
+    /*
      * 已打卡时是否也通知。
      * true：每次检查都会通知结果。
      * false：只有缺卡/失败时通知。
@@ -31,9 +42,14 @@ const CONFIG = {
     notifyWhenMissingPunch: true,
 
     /*
+     * API 失败时是否按“未打卡/需要确认”通知。
+     */
+    treatApiFailureAsMissing: true,
+
+    /*
      * 请求超时时间，单位秒。
      */
-    timeout: 20,
+    timeout: 2,
 
     /*
      * 允许你覆盖部分 headers。
@@ -77,6 +93,140 @@ const CONFIG = {
     overrideFormBody: {}
 };
 
+function parseArguments() {
+    const raw = typeof $argument === "string" ? $argument : "";
+    const result = {};
+
+    raw.split("&").forEach(pair => {
+        if (!pair) return;
+
+        const eqIndex = pair.indexOf("=");
+        const rawKey = eqIndex >= 0 ? pair.slice(0, eqIndex) : pair;
+        const rawValue = eqIndex >= 0 ? pair.slice(eqIndex + 1) : "true";
+
+        const key = decodeURIComponent(rawKey || "").trim();
+        if (!key) return;
+
+        result[key] = decodeURIComponent(rawValue || "").trim();
+    });
+
+    return result;
+}
+
+function readBool(value, fallback) {
+    if (value === undefined || value === null || value === "") return fallback;
+
+    const text = lower(value);
+    if (["1", "true", "yes", "y", "on"].includes(text)) return true;
+    if (["0", "false", "no", "n", "off"].includes(text)) return false;
+
+    return fallback;
+}
+
+function readNumber(value, fallback) {
+    if (value === undefined || value === null || value === "") return fallback;
+
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+}
+
+function parseJsonObject(value, fallback) {
+    if (!value) return fallback;
+
+    try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+            ? parsed
+            : fallback;
+    } catch (e) {
+        log("Argument JSON parse failed, keep fallback: " + e);
+        return fallback;
+    }
+}
+
+function collectPrefixedArguments(args, prefix) {
+    const result = {};
+    const fullPrefix = prefix + ".";
+
+    for (const key in args) {
+        if (key.indexOf(fullPrefix) !== 0) continue;
+
+        const targetKey = key.slice(fullPrefix.length);
+        if (targetKey) result[targetKey] = args[key];
+    }
+
+    return result;
+}
+
+function mergeObjects(base, extra) {
+    const result = {};
+
+    for (const key in base || {}) {
+        result[key] = base[key];
+    }
+
+    for (const key in extra || {}) {
+        result[key] = extra[key];
+    }
+
+    return result;
+}
+
+function applyArguments() {
+    const args = parseArguments();
+
+    CONFIG.debug = readBool(args.debug, CONFIG.debug);
+    CONFIG.targetCardType = args.target_card_type || CONFIG.targetCardType;
+    CONFIG.targetDate = args.target_date || CONFIG.targetDate;
+    CONFIG.notifyWhenAlreadyPunched = readBool(
+        args.notify_when_already_punched,
+        CONFIG.notifyWhenAlreadyPunched
+    );
+    CONFIG.notifyWhenMissingPunch = readBool(
+        args.notify_when_missing_punch,
+        CONFIG.notifyWhenMissingPunch
+    );
+    CONFIG.treatApiFailureAsMissing = readBool(
+        args.treat_api_failure_as_missing,
+        CONFIG.treatApiFailureAsMissing
+    );
+    CONFIG.timeout = readNumber(args.request_timeout, CONFIG.timeout);
+
+    CONFIG.overrideHeaders = mergeObjects(
+        CONFIG.overrideHeaders,
+        parseJsonObject(args.override_headers, {})
+    );
+    CONFIG.overrideQuery = mergeObjects(
+        CONFIG.overrideQuery,
+        parseJsonObject(args.override_query, {})
+    );
+    CONFIG.overrideJsonBody = mergeObjects(
+        CONFIG.overrideJsonBody,
+        parseJsonObject(args.override_json_body, {})
+    );
+    CONFIG.overrideFormBody = mergeObjects(
+        CONFIG.overrideFormBody,
+        parseJsonObject(args.override_form_body, {})
+    );
+
+    CONFIG.overrideHeaders = mergeObjects(
+        CONFIG.overrideHeaders,
+        collectPrefixedArguments(args, "header")
+    );
+    CONFIG.overrideQuery = mergeObjects(
+        CONFIG.overrideQuery,
+        collectPrefixedArguments(args, "query")
+    );
+    CONFIG.overrideJsonBody = mergeObjects(
+        CONFIG.overrideJsonBody,
+        collectPrefixedArguments(args, "json")
+    );
+    CONFIG.overrideFormBody = mergeObjects(
+        CONFIG.overrideFormBody,
+        collectPrefixedArguments(args, "form")
+    );
+}
+
 function log(message) {
     if (CONFIG.debug) {
         console.log("[WelinkPunchReplay] " + message);
@@ -110,7 +260,22 @@ function todayLocalDate() {
     return `${y}-${m}-${day}`;
 }
 
+function targetLocalDate() {
+    const value = lower(CONFIG.targetDate);
+
+    if (!value || value === "auto" || value === "today") {
+        return todayLocalDate();
+    }
+
+    return String(CONFIG.targetDate);
+}
+
 function currentTargetCardType() {
+    const configured = lower(CONFIG.targetCardType);
+
+    if (["1", "morning", "am"].includes(configured)) return "1";
+    if (["2", "evening", "pm"].includes(configured)) return "2";
+
     const hour = new Date().getHours();
 
     /*
@@ -123,6 +288,32 @@ function currentTargetCardType() {
 
 function cardTypeLabel(cardType) {
     return String(cardType) === "1" ? "上午" : "下午";
+}
+
+function firstDefined(object, names) {
+    for (let i = 0; i < names.length; i++) {
+        const name = names[i];
+
+        if (
+            object &&
+            Object.prototype.hasOwnProperty.call(object, name) &&
+            object[name] !== null &&
+            object[name] !== undefined
+        ) {
+            return object[name];
+        }
+    }
+
+    return "";
+}
+
+function recordDate(record) {
+    const value = firstDefined(record, ["date", "punchDate", "workDate"]);
+    return String(value || "").slice(0, 10);
+}
+
+function recordCardType(record) {
+    return String(firstDefined(record, ["cardType", "cardtype", "card_type"]));
 }
 
 function getHeader(headers, name) {
@@ -260,7 +451,7 @@ function applyBodyOverrides(body, headers) {
 }
 
 function parsePunchStatus(responseBody) {
-    const today = todayLocalDate();
+    const today = targetLocalDate();
     const targetCardType = currentTargetCardType();
     const targetLabel = cardTypeLabel(targetCardType);
 
@@ -289,12 +480,12 @@ function parsePunchStatus(responseBody) {
 
     const records = json && json.data && Array.isArray(json.data.records)
         ? json.data.records
-        : [];
+        : (Array.isArray(json.records) ? json.records : []);
 
-    const todayRecords = records.filter(item => String(item.date) === today);
+    const todayRecords = records.filter(item => recordDate(item) === today);
 
-    const morningRecord = todayRecords.find(item => String(item.cardType) === "1");
-    const eveningRecord = todayRecords.find(item => String(item.cardType) === "2");
+    const morningRecord = todayRecords.find(item => recordCardType(item) === "1");
+    const eveningRecord = todayRecords.find(item => recordCardType(item) === "2");
 
     const hasMorning = Boolean(morningRecord);
     const hasEvening = Boolean(eveningRecord);
@@ -357,7 +548,9 @@ function handleReplayResult(error, response, data) {
 
     if (error) {
         notify(
-            `Welink ${targetLabel}打卡状态无法确认`,
+            CONFIG.treatApiFailureAsMissing
+                ? `Welink ${targetLabel}可能未打卡`
+                : `Welink ${targetLabel}打卡状态无法确认`,
             `当前时间：${currentTime}`,
             `请求失败。按规则视为可能未打卡，请打开 Welink 确认。错误：${error}`
         );
@@ -369,7 +562,9 @@ function handleReplayResult(error, response, data) {
 
     if (!statusCode.startsWith("2")) {
         notify(
-            `Welink ${targetLabel}打卡状态无法确认`,
+            CONFIG.treatApiFailureAsMissing
+                ? `Welink ${targetLabel}可能未打卡`
+                : `Welink ${targetLabel}打卡状态无法确认`,
             `当前时间：${currentTime}`,
             `HTTP 状态码：${statusCode}。按规则视为可能未打卡，请打开 Welink 确认。`
         );
@@ -381,7 +576,9 @@ function handleReplayResult(error, response, data) {
 
     if (!result.apiSuccess) {
         notify(
-            `Welink ${targetLabel}打卡状态无法确认`,
+            CONFIG.treatApiFailureAsMissing
+                ? `Welink ${targetLabel}可能未打卡`
+                : `Welink ${targetLabel}打卡状态无法确认`,
             `当前时间：${currentTime}`,
             `${result.reason}。按规则视为可能未打卡，请打开 Welink 确认。${result.detail || ""}`
         );
@@ -406,7 +603,7 @@ function handleReplayResult(error, response, data) {
         notify(
             `Welink ${result.targetLabel}已检测到打卡记录`,
             `当前时间：${currentTime}`,
-            `日期：${result.today}；打卡时间：${result.targetTime || "未知"}。`
+            `已完成重放查询。日期：${result.today}；打卡时间：${result.targetTime || "未知"}。`
         );
     }
 
@@ -415,6 +612,8 @@ function handleReplayResult(error, response, data) {
 
 function main() {
     try {
+        applyArguments();
+
         const raw = $persistentStore.read(STORE_KEY);
 
         if (!raw) {

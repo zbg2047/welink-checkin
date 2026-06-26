@@ -56,6 +56,47 @@ const CONFIG = {
     ]
 };
 
+function parseArguments() {
+    const raw = typeof $argument === "string" ? $argument : "";
+    const result = {};
+
+    raw.split("&").forEach(pair => {
+        if (!pair) return;
+
+        const eqIndex = pair.indexOf("=");
+        const rawKey = eqIndex >= 0 ? pair.slice(0, eqIndex) : pair;
+        const rawValue = eqIndex >= 0 ? pair.slice(eqIndex + 1) : "true";
+
+        const key = decodeURIComponent(rawKey || "").trim();
+        if (!key) return;
+
+        result[key] = decodeURIComponent(rawValue || "").trim();
+    });
+
+    return result;
+}
+
+function readBool(value, fallback) {
+    if (value === undefined || value === null || value === "") return fallback;
+
+    const text = lower(value);
+    if (["1", "true", "yes", "y", "on"].includes(text)) return true;
+    if (["0", "false", "no", "n", "off"].includes(text)) return false;
+
+    return fallback;
+}
+
+function applyArguments() {
+    const args = parseArguments();
+
+    CONFIG.debug = readBool(args.debug, CONFIG.debug);
+    CONFIG.saveOnlyWhenApiSuccess = readBool(
+        args.save_only_success,
+        CONFIG.saveOnlyWhenApiSuccess
+    );
+    CONFIG.saveAllHeaders = readBool(args.save_all_headers, CONFIG.saveAllHeaders);
+}
+
 function log(message) {
     if (CONFIG.debug) {
         console.log("[WelinkPunchCapture] " + message);
@@ -111,12 +152,6 @@ function cleanHeaders(headers) {
         }
     }
 
-    /*
-     * 给重放请求打标，避免重放请求又被 capture 脚本保存，
-     * 导致覆盖早上真实 App 请求。
-     */
-    result[REPLAY_HEADER_NAME] = "1";
-
     return result;
 }
 
@@ -144,6 +179,8 @@ function apiResponseSuccess(body) {
 
 function main() {
     try {
+        applyArguments();
+
         if (isReplayRequest()) {
             log("Skip replay request.");
             $done({});
