@@ -1,12 +1,8 @@
 #!name=Welink 打卡状态检查
 #!desc=捕获 Welink 打卡记录查询请求，并在指定时间重放查询上午/下午打卡状态，仅用于状态检查与提醒
 #!system=ios
-#!arguments=date:auto
-#!arguments=manual:auto
-#!arguments=timeout:2
-#!arguments-desc=date:\n查询日期。auto 表示自动使用当天日期，也可手动填写如 2026-06-26
-#!arguments-desc=manual:\n手动触发时检查的打卡类型。auto=自动判断，1=上午，2=下午
-#!arguments-desc=timeout:\n重放请求的超时时间（秒），默认 2 秒
+#!arguments=date:auto&manual:auto&timeout:2
+#!arguments-desc=date:\n查询日期。auto=自动使用当天，也可手动填写如 2026-06-26\nmanual:\n手动触发时的打卡类型。auto=按当前时间，1=上午，2=下午\ntimeout:\n重放请求超时时间（秒），默认 2
 
 [MITM]
 hostname = %APPEND% api.welink.huaweicloud.com
