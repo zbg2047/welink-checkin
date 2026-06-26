@@ -43,27 +43,21 @@ scripts/welink-punch-replay.js
 
 模块头部使用官方 `#!arguments=...` 声明可编辑参数，脚本行再用 `%参数名%` 占位传给 `$argument`。
 
-注意：单纯在脚本行写 `argument="..."` 只会让脚本读到 `$argument`，不会生成模块参数编辑界面。
+注意：在当前 Surge iOS UI 上，模块参数编辑页可能只显示一个原始 query-string 输入框，不会拆成多行表单。为了避免长参数不可编辑，本模块只暴露三个常用参数：
 
-### capture 参数
+```text
+date=auto&manual=auto&timeout=2
+```
 
-- `debug=true`：输出调试日志。
-- `save_only_success=true`：只在 API 返回成功时保存请求。
-- `save_all_headers=true`：保存请求 headers。脚本仍会跳过 `host`、`content-length`、`accept-encoding`、`connection` 这类不适合重放的头。
+- `date=auto`：`auto` 或 `today` 表示今天；也可以手动填 `2026-06-26`。
+- `manual=auto`：手动 generic 脚本的目标卡类型；`auto` 按当前时间判断，也可以填 `1` 或 `2`。定时任务上午固定 `1`，下午固定 `2`。
+- `timeout=2`：重放查询请求超时时间，单位秒。
 
-### replay 参数
-
-- `target_card_type=auto`：`auto` 按当前时间判断；也可以填 `1` / `morning` / `am` 或 `2` / `evening` / `pm`。
-- `manual_target_card_type=auto`：手动执行脚本时使用的目标卡类型；定时任务上午固定为 `1`，下午固定为 `2`。
-- `target_date=auto`：`auto` 或 `today` 表示今天；也可以手动填 `2026-06-26`。
-- `notify_when_already_punched=true`：已检测到打卡记录时也通知。
-- `notify_when_missing_punch=true`：缺少目标卡类型时通知。
-- `treat_api_failure_as_missing=true`：请求失败或 API 返回失败时按可能未打卡提醒。
-- `request_timeout=2`：重放查询请求超时时间，单位秒。
+捕获脚本固定为只保存成功响应并保存请求 headers；重放脚本固定为缺卡、请求失败、已打卡都会通知。如需高级覆盖 headers/query/body，请直接编辑模块中对应脚本行的 `argument="..."`。
 
 ### 覆盖请求参数
 
-可以在 Surge 的模块参数里填写 URL 编码后的 JSON，脚本会覆盖已保存请求中的对应内容。
+如果你直接编辑脚本行的 `argument`，可以传 URL 编码后的 JSON 覆盖已保存请求中的对应内容。
 
 ```text
 override_headers=%7B%22User-Agent%22%3A%22xxx%22%7D
