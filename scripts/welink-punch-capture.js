@@ -74,10 +74,33 @@ function parseArguments() {
         const rawKey = eqIndex >= 0 ? pair.slice(0, eqIndex) : pair;
         const rawValue = eqIndex >= 0 ? pair.slice(eqIndex + 1) : "true";
 
-        const key = decodeURIComponent(rawKey || "").trim();
+        /*
+         * 如果模块变量未能正确替换，rawKey 或 rawValue 可能是
+         * 形如 %date% 的原始占位符。decodeURIComponent 会对其中的
+         * %XX 字节序列解码，遇到非法序列时抛出 URIError。
+         * 这里用 try-catch 兜底：解码失败时跳过该键，
+         * 让 applyArguments 中对应的 CONFIG 字段保持默认值。
+         */
+        let key;
+        try {
+            key = decodeURIComponent(rawKey || "").trim();
+        } catch (e) {
+            return;
+        }
+
         if (!key) return;
 
-        result[key] = decodeURIComponent(rawValue || "").trim();
+        /* 跳过未替换的占位符值（形如 %someKey%） */
+        if (/^%\w+%$/.test(rawValue.trim())) return;
+
+        let value;
+        try {
+            value = decodeURIComponent(rawValue || "").trim();
+        } catch (e) {
+            return;
+        }
+
+        result[key] = value;
     });
 
     return result;
