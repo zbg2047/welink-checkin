@@ -24,7 +24,7 @@ const CONFIG = {
      * - HTTP 响应后：显示状态码、响应体前 300 字符
      * - 解析完成后：显示今日所有打卡记录的详细信息
      */
-    debugNotify: true,
+    debugNotify: false,
 
     /*
      * auto：按当前时间判断；1/morning/am：上午；2/evening/pm：下午。
@@ -589,8 +589,8 @@ function handleReplayResult(error, response, data) {
             CONFIG.treatApiFailureAsMissing
                 ? `Welink ${targetLabel}可能未打卡`
                 : `Welink ${targetLabel}打卡状态无法确认`,
-            `当前时间：${currentTime}`,
-            `请求失败。按规则视为可能未打卡，请打开 Welink 确认。错误：${error}`
+            currentTime,
+            `请求失败，请打开 Welink 确认。${String(error).slice(0, 80)}`
         );
         $done();
         return;
@@ -599,9 +599,9 @@ function handleReplayResult(error, response, data) {
     const statusCode = response && response.status ? String(response.status) : "unknown";
 
     debugNotify(
-        "API 响应已收到",
-        `状态码：${statusCode}  时间：${currentTime}`,
-        "响应体前 300 字符：\n" + String(data || "").slice(0, 300)
+        "[Replay] API 响应",
+        `HTTP ${statusCode} · ${currentTime.slice(11, 19)}`,
+        String(data || "").slice(0, 150)
     );
 
     if (!statusCode.startsWith("2")) {
@@ -609,8 +609,8 @@ function handleReplayResult(error, response, data) {
             CONFIG.treatApiFailureAsMissing
                 ? `Welink ${targetLabel}可能未打卡`
                 : `Welink ${targetLabel}打卡状态无法确认`,
-            `当前时间：${currentTime}`,
-            `HTTP 状态码：${statusCode}。按规则视为可能未打卡，请打开 Welink 确认。`
+            currentTime,
+            `HTTP ${statusCode}，请打开 Welink 确认`
         );
         $done();
         return;
@@ -623,29 +623,25 @@ function handleReplayResult(error, response, data) {
             CONFIG.treatApiFailureAsMissing
                 ? `Welink ${targetLabel}可能未打卡`
                 : `Welink ${targetLabel}打卡状态无法确认`,
-            `当前时间：${currentTime}`,
-            `${result.reason}。按规则视为可能未打卡，请打开 Welink 确认。${result.detail || ""}`
+            currentTime,
+            result.reason
         );
         $done();
         return;
     }
 
     debugNotify(
-        "解析完成 · 今日打卡详情",
-        `日期：${result.today}  共 ${result.allRecordCount} 条记录`,
-        `上午：${result.hasMorning ? "✓ " + result.morningTime : "✗ 无记录"}` +
-        `\n下午：${result.hasEvening ? "✓ " + result.eveningTime : "✗ 无记录"}` +
-        `\n检查目标：${result.targetLabel}` +
-        `\n目标打卡：${result.targetExists ? "✓ " + result.targetTime : "✗ 未找到"}` +
-        `\n当天匹配记录数：${result.todayRecordCount}`
+        "[Replay] 今日打卡详情",
+        `${result.today} · ${result.allRecordCount} 条`,
+        `上午 ${result.hasMorning ? "✓ " + result.morningTime : "✗"} · 下午 ${result.hasEvening ? "✓ " + result.eveningTime : "✗"}\n目标 ${result.targetLabel}：${result.targetExists ? "✓ " + result.targetTime : "✗ 未找到"}`
     );
 
     if (!result.targetExists) {
         if (CONFIG.notifyWhenMissingPunch) {
             notify(
                 `Welink ${result.targetLabel}还没有打卡记录`,
-                `当前时间：${currentTime}`,
-                `日期：${result.today}。上午：${result.hasMorning ? "已打卡 " + result.morningTime : "缺失"}；下午：${result.hasEvening ? "已打卡 " + result.eveningTime : "缺失"}。`
+                `${result.today} · ${currentTime.slice(11, 16)}`,
+                `上午 ${result.hasMorning ? "✓ " + result.morningTime : "✗ 缺失"} · 下午 ${result.hasEvening ? "✓ " + result.eveningTime : "✗ 缺失"}`
             );
         }
 
@@ -656,8 +652,8 @@ function handleReplayResult(error, response, data) {
     if (CONFIG.notifyWhenAlreadyPunched) {
         notify(
             `Welink ${result.targetLabel}已检测到打卡记录`,
-            `当前时间：${currentTime}`,
-            `已完成重放查询。日期：${result.today}；打卡时间：${result.targetTime || "未知"}。`
+            `${result.today} · 打卡时间 ${result.targetTime || "未知"}`,
+            `上午 ${result.hasMorning ? "✓ " + result.morningTime : "✗ 缺失"} · 下午 ${result.hasEvening ? "✓ " + result.eveningTime : "✗ 缺失"}`
         );
     }
 
@@ -673,23 +669,20 @@ function main() {
         if (!raw) {
             notify(
                 "Welink 打卡检查失败",
-                `当前时间：${nowText()}`,
-                "尚未捕获到可重放请求。请先正常打开 Welink 并访问一次打卡记录页面。"
+                nowText(),
+                "尚未捕获凭据，请先打开 Welink 访问打卡记录页面"
             );
             $done();
             return;
         }
 
         const record = JSON.parse(raw);
+        const typeLabel = currentTargetCardType() === "1" ? "上午" : "下午";
 
         debugNotify(
-            "脚本已启动",
-            `当前时间：${nowText()}`,
-            `目标类型：${currentTargetCardType() === "1" ? "上午" : "下午"}（配置：${CONFIG.targetCardType}）` +
-            `\n目标日期：${targetLocalDate()}` +
-            `\n凭据保存于：${record.savedAt || "未知"}` +
-            `\n凭据日期：${record.savedDate || "未知"}` +
-            `\ntimeout：${CONFIG.timeout}s`
+            "[Replay] 脚本已启动",
+            `${typeLabel} · ${targetLocalDate()} · ${nowText().slice(11, 19)}`,
+            `凭据日期：${record.savedDate || "未知"} · timeout ${CONFIG.timeout}s`
         );
 
         const built = buildOptions(record);
@@ -700,8 +693,8 @@ function main() {
     } catch (e) {
         notify(
             "Welink 打卡检查脚本异常",
-            `当前时间：${nowText()}`,
-            String(e)
+            nowText(),
+            String(e).slice(0, 100)
         );
         $done();
     }

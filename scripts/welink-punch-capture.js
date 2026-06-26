@@ -22,7 +22,7 @@ const CONFIG = {
      * 显示捕获是否成功、保存时间、URL 等信息。
      * 用于调试：确认 App 是否真的访问了该接口，以及保存是否正常。
      */
-    debugNotify: true,
+    debugNotify: false,
 
     /*
      * 是否只保存成功响应。
@@ -231,10 +231,9 @@ function main() {
         if (CONFIG.saveOnlyWhenApiSuccess && !apiOk) {
             log("API response is not success. Skip saving request.");
             debugNotify(
-                "API 调用已拦截（未保存）",
-                "时间：" + captureTime,
-                "save_only_success=true，但本次 API 响应判定为失败，跳过保存。\n" +
-                "响应前 200 字符：" + body.slice(0, 200)
+                "[Capture] API 已拦截·未保存",
+                captureTime,
+                "API 响应判定为失败，凭据跳过保存"
             );
             $done({});
             return;
@@ -255,19 +254,16 @@ function main() {
         if (ok) {
             log("Saved request at " + record.savedAt);
             debugNotify(
-                "API 调用已捕获并保存 ✓",
-                "保存时间：" + captureTime,
-                "日期：" + record.savedDate +
-                "\nMethod：" + record.method +
-                "\nAPI 响应：" + (apiOk ? "成功 (code=0)" : "未检查") +
-                "\nURL（前 80 字符）：" + record.url.slice(0, 80)
+                "[Capture] API 已捕获并保存 ✓",
+                record.savedDate + " · " + captureTime.slice(11, 19),
+                "凭据已更新 · " + record.method
             );
         } else {
             log("Failed to save request.");
             debugNotify(
-                "API 调用已拦截（保存失败）✗",
-                "时间：" + captureTime,
-                "persistentStore.write 返回 false，凭据未能保存。请检查 Surge 存储权限。"
+                "[Capture] 保存失败 ✗",
+                captureTime.slice(11, 19),
+                "persistentStore 写入失败，请检查 Surge 存储权限"
             );
         }
 
@@ -275,9 +271,9 @@ function main() {
     } catch (e) {
         log("Capture error: " + e);
         debugNotify(
-            "Capture 脚本异常 ✗",
-            nowISO(),
-            String(e)
+            "[Capture] 脚本异常 ✗",
+            nowISO().slice(11, 19),
+            String(e).slice(0, 100)
         );
         $done({});
     }
