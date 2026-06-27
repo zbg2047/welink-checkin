@@ -9,8 +9,10 @@
 - 捕获 API：
   `https://api.welink.huaweicloud.com/mcloud/mag/ProxyForText/attendance_report_api/v1/user/statistics/dailyPunchCardRecords`
 - API 成功返回时，保存本次请求的 URL、method、headers、body
-- 每天 06:24 - 06:30 每分钟检查一次上午打卡
-- 每天 18:05 - 18:30 每 3 分钟检查一次下午打卡
+- 周一到周五 08:25 - 08:30 每分钟检查一次上午打卡
+- 周六 08:55 - 09:30 每分钟检查一次上午打卡
+- 周一到周六 18:10 - 18:30 每 2 分钟检查一次下午打卡
+- 周日不检查
 - 模块内保留 `type=generic` 重放脚本条目；是否能在 Surge 脚本页手动运行取决于 Surge 是否展示模块注入的脚本
 - 根据返回 JSON 中的 `data.records[].date` 和 `cardType` / `cardtype` / `card_type` 判断打卡状态
 - `cardType = 1` 表示上午
@@ -56,6 +58,10 @@ date=auto&timeout=2&notify_punched=true&notify_missing=true&debug=true&debug_not
 - `notify_missing=true`：未打卡时是否通知。
 - `debug=true`：是否输出控制台日志。
 - `debug_notify=false`：是否推送调试通知。
+- `cron_weekday_morning=25-30 8 * * 1-5`：周一到周五 08:25 - 08:30，每分钟一次。
+- `cron_saturday_morning_8=55-59 8 * * 6`：周六 08:55 - 08:59，每分钟一次。
+- `cron_saturday_morning_9=0-30 9 * * 6`：周六 09:00 - 09:30，每分钟一次。
+- `cron_evening=10-30/2 18 * * 1-6`：周一到周六 18:10 - 18:30，每两分钟一次。
 
 捕获脚本固定为只保存成功响应并保存请求 headers；重放脚本固定为缺卡、请求失败、已打卡都会通知。如需高级覆盖 headers/query/body，请直接编辑模块中对应脚本行的 `argument="..."`。
 
