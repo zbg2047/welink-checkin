@@ -54,7 +54,7 @@ date=auto&timeout=2&notify_punched=true&notify_missing=true&debug=true&debug_not
 - `date=auto`：`auto` 或 `today` 表示今天；也可以手动填 `2026-06-26`。
 - 上午/下午目标由脚本运行时的当前时间自动判断：12:00 前为上午，12:00 后为下午。
 - `timeout=2`：重放查询请求超时时间，单位秒。
-- `notify_punched=true`：已打卡时是否通知。
+- `notify_punched=true`：首次检测到当天上午/下午已打卡时是否通知；同一天同一时段后续检查会静默。
 - `notify_missing=true`：未打卡时是否通知。
 - `debug=true`：是否输出控制台日志。
 - `debug_notify=false`：是否推送调试通知。
@@ -63,7 +63,7 @@ date=auto&timeout=2&notify_punched=true&notify_missing=true&debug=true&debug_not
 - `cron_saturday_morning_9=0-30 9 * * 6`：周六 09:00 - 09:30，每分钟一次。
 - `cron_evening=10-30/2 18 * * 1-6`：周一到周六 18:10 - 18:30，每两分钟一次。
 
-捕获脚本固定为只保存成功响应并保存请求 headers；重放脚本固定为缺卡、请求失败、已打卡都会通知。如需高级覆盖 headers/query/body，请直接编辑模块中对应脚本行的 `argument="..."`。
+捕获脚本固定为只保存成功响应并保存请求 headers；重放脚本会在缺卡、请求失败时提醒，首次检测到当天上午/下午已打卡时可按配置通知，后续同一时段会静默。如需高级覆盖 headers/query/body，请直接编辑模块中对应脚本行的 `argument="..."`。
 
 ### 覆盖请求参数
 

@@ -13,6 +13,7 @@
  */
 
 const STORE_KEY = "welink_punch_daily_request_v1";
+const STATUS_STORE_KEY = "welink_punch_daily_status_v1";
 const REPLAY_HEADER_NAME = "X-Surge-Welink-Replay";
 
 const CONFIG = {
@@ -304,6 +305,53 @@ function nowText() {
     const hh = String(d.getHours()).padStart(2, "0");
     const mm = String(d.getMinutes()).padStart(2, "0");
     return `${y}-${m}-${day} ${hh}:${mm}`;
+}
+
+function readStatusState() {
+    const fallback = {
+        version: 1,
+        confirmed: {}
+    };
+    const raw = $persistentStore.read(STATUS_STORE_KEY);
+
+    if (!raw) return fallback;
+
+    try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return fallback;
+        if (!parsed.confirmed || typeof parsed.confirmed !== "object") parsed.confirmed = {};
+        return parsed;
+    } catch (e) {
+        log("Failed to parse status store: " + e);
+        return fallback;
+    }
+}
+
+function wasPunchAlreadyConfirmed(state, date, cardType) {
+    const dateState = state && state.confirmed && state.confirmed[date];
+    return Boolean(dateState && dateState[String(cardType)]);
+}
+
+function markPunchConfirmed(state, date, cardType, punchTime) {
+    const existingDateState = state && state.confirmed && state.confirmed[date]
+        ? state.confirmed[date]
+        : {};
+
+    const nextState = {
+        version: 1,
+        updatedAt: nowText(),
+        confirmed: {}
+    };
+
+    nextState.confirmed[date] = existingDateState;
+    nextState.confirmed[date][String(cardType)] = {
+        label: cardTypeLabel(cardType),
+        punchTime: punchTime || "",
+        confirmedAt: nowText()
+    };
+
+    const ok = $persistentStore.write(JSON.stringify(nextState), STATUS_STORE_KEY);
+    if (!ok) log("Failed to write status store.");
 }
 
 function todayLocalDate() {
@@ -671,11 +719,26 @@ function handleReplayResult(error, response, data) {
     }
 
     if (CONFIG.notifyWhenAlreadyPunched) {
+        const statusState = readStatusState();
+
+        if (wasPunchAlreadyConfirmed(statusState, result.today, result.targetCardType)) {
+            log(`Skip duplicate punched notification: ${result.today} ${result.targetLabel}`);
+            $done();
+            return;
+        }
+
+        markPunchConfirmed(statusState, result.today, result.targetCardType, result.targetTime);
+
         notify(
             `✅ 已成功打卡，${result.targetLabel}不再提醒`,
             `${result.today} · 打卡时间 ${result.targetTime || "未知"}`,
             `上午 ${result.hasMorning ? "✓ " + result.morningTime : "✗ 缺失"} · 下午 ${result.hasEvening ? "✓ " + result.eveningTime : "✗ 缺失"}`
         );
+    } else {
+        const statusState = readStatusState();
+        if (!wasPunchAlreadyConfirmed(statusState, result.today, result.targetCardType)) {
+            markPunchConfirmed(statusState, result.today, result.targetCardType, result.targetTime);
+        }
     }
 
     $done();
@@ -684,6 +747,17 @@ function handleReplayResult(error, response, data) {
 function main() {
     try {
         applyArguments();
+
+        const plannedDate = targetLocalDate();
+        const plannedCardType = currentTargetCardType();
+        const plannedLabel = cardTypeLabel(plannedCardType);
+        const statusState = readStatusState();
+
+        if (wasPunchAlreadyConfirmed(statusState, plannedDate, plannedCardType)) {
+            log(`Skip check, punch already confirmed: ${plannedDate} ${plannedLabel}`);
+            $done();
+            return;
+        }
 
         const raw = $persistentStore.read(STORE_KEY);
 
@@ -698,11 +772,10 @@ function main() {
         }
 
         const record = JSON.parse(raw);
-        const typeLabel = currentTargetCardType() === "1" ? "上午" : "下午";
 
         debugNotify(
             "检查已启动",
-            `${typeLabel} · ${targetLocalDate()} · ${nowText().slice(11)}`,
+            `${plannedLabel} · ${plannedDate} · ${nowText().slice(11)}`,
             `凭据日期：${record.savedDate || "未知"} · timeout ${CONFIG.timeout}s`
         );
 
