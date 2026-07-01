@@ -65,6 +65,8 @@ date=auto&timeout=2&notify_punched=true&notify_missing=true&debug=true&debug_not
 
 捕获脚本固定为只保存成功响应并保存请求 headers；重放脚本会在缺卡、请求失败时提醒，首次检测到当天上午/下午已打卡时可按配置通知，后续同一时段会静默。如需高级覆盖 headers/query/body，请直接编辑模块中对应脚本行的 `argument="..."`。
 
+声音提醒通过 `[Script]` 行的 `sound=true` 配置开启；脚本内部仍使用三参数 `$notification.post(title, subtitle, body)`，不要把 `sound` 放进 `$notification.post` 的第四参数里。
+
 ### 覆盖请求参数
 
 如果你直接编辑脚本行的 `argument`，可以传 URL 编码后的 JSON 覆盖已保存请求中的对应内容。
